@@ -47,24 +47,32 @@ public class ExerciciJDBC {
      */
     public static Connection connectar() throws SQLException {
         // ESCRIU AQUÍ EL TEU CODI
-        return DriverManager.getConnection(
-                Configuracio.URL,
-                Configuracio.USUARI,
-                Configuracio.CONTRASENYA
-        );
-    }
+        Connection  connection = DriverManager.getConnection(Configuracio.URL,Configuracio.USUARI,Configuracio.CONTRASENYA);
+        return  connection;
+    };
     /**
      * TODO: Consulta complexa amb JOINS.
      * Ha de mostrar: Títol del llibre, Categoria, Nom de l'autor (un o diversos) i Disponibilitat.
      * Cal ajuntar: llibres, categories, llibres_autors i autors.
      */
+
     public static void llistarLlibresAmbDetalls(Connection conn) {
+
         System.out.println("\n--- LLISTAT DETALLAT DE LLIBRES ---");
         // Recorda que un llibre pot tenir diversos autors (relació molts-a-molts)
-        String sql = ""; // ESCRIU LA CONSULTA AQUÍ
+        String sql = "SELECT l.titol, l.isbn, c.nom FROM `llibres` l,`categories` c WHERE l.categoria_id = c.id"; // ESCRIU LA CONSULTA AQUÍ
 
-        try (Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+        try {
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(sql);
+            while (rs.next()){
+               String titol= rs.getString(1);
+               String isbn = rs.getString(2);
+               String cat=rs.getString(3);
+                System.out.printf("Llibre: %s, isbn: %s, categoria: %s \n",titol, isbn, cat);
+            }
+
+
 
             // TODO: Recórrer el ResultSet i mostrar la informació formatada
             
@@ -80,7 +88,19 @@ public class ExerciciJDBC {
     public static int afegirNouAutor(Connection conn, String nom, String nacionalitat) throws SQLException {
         String sql = "INSERT INTO autors (nom, nacionalitat) VALUES (?, ?)";
         // TODO: Implementar inserció i recuperació de l'ID generat
-        return -1;
+        PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+        stmt.setString(1,nom);
+        stmt.setString(2,nacionalitat);
+        stmt.execute();
+
+        ResultSet generatedKeys = stmt.getGeneratedKeys();;
+        int id = 0;
+        if (generatedKeys.next()){
+            id = (int) generatedKeys.getLong(1);
+        }else {
+           return -1;
+        }
+        return  id;
     }
 
     /**
@@ -94,14 +114,49 @@ public class ExerciciJDBC {
         System.out.println("\n--- PROVA D'INJECCIÓ SQL ---");
         System.out.print("Introdueix l'email d'un soci per veure les seves dades: ");
         String email = sc.nextLine();
+try{
+    System.out.println("\n[1] Intentant cerca vulnerable...");
+    // TODO: Implementar cerca vulnerable
+    String sqlVulnerable = "select * from socis where email='"+email + "'";
+    // ' OR 1=1 OR ''=' ESTA ES LA QUERY VULNERABLES
+    Statement statement= conn.createStatement();
+   ResultSet rs= statement.executeQuery(sqlVulnerable);
+   while (rs.next()){
+       int id = rs.getInt(1);
+       String nom = rs.getString(2);
+       String em = rs.getString(3);
+       System.out.printf("ID: %d, nom %s, email: %s\n",id,nom,em);
+   }
 
+    // [2] Cas segur (PreparedStatement)
+    System.out.println("\n[2] Intentant cerca segura...");
+    // TODO: Implementar cerca segura
+} catch (Exception e){
+    System.out.println(e.getMessage());
+}
         // [1] Cas vulnerable (Statement concatenant strings)
-        System.out.println("\n[1] Intentant cerca vulnerable...");
-        // TODO: Implementar cerca vulnerable
+        try{
+            System.out.println("\n[1] Intentant cerca vulnerable...");
+            // TODO: Implementar cerca vulnerable
+            String sql = "select * from socis where email=?";
+            // ' OR 1=1 OR ''=' ESTA ES LA QUERY VULNERABLES
+            PreparedStatement statement= conn.prepareStatement(sql);
+            statement.setString(1,email);
+            ResultSet rs= statement.executeQuery(sql);
+            while (rs.next()){
+                int id = rs.getInt(1);
+                String nom = rs.getString(2);
+                String em = rs.getString(3);
+                System.out.printf("ID: %d, nom %s, email: %s\n",id,nom,em);
+            }
 
-        // [2] Cas segur (PreparedStatement)
-        System.out.println("\n[2] Intentant cerca segura...");
-        // TODO: Implementar cerca segura
+            // [2] Cas segur (PreparedStatement)
+            System.out.println("\n[2] Intentant cerca segura...");
+            // TODO: Implementar cerca segura
+        } catch (Exception e){
+            System.out.println(e.getMessage());
+        }
+
     }
 
     /**
@@ -118,16 +173,41 @@ public class ExerciciJDBC {
     public static void realitzarPrestec(Connection conn, int llibreId, int sociId) {
         System.out.println("\n--- PROCESSANT PRÈSTEC ---");
         
-     /*   try {
+       try {
             // TODO: Implementar lògica de transacció
+           PreparedStatement ps = conn.prepareStatement("select * from llibres where id=?");
+           ps.setInt(1,llibreId);
+           ResultSet rs= ps.executeQuery();
+            if (!rs.next()){
+                throw  new SQLException("LLIBRE NO TROBAT");
+            }
+            conn.setAutoCommit(false);
 
+            ps.close();
+            ps = conn.prepareStatement("insert into prestecs (llibre_id, soci_id, data:prestec, data_retorn_prevista, data_retorn_real) values(?,?,'2024-05-15,'2024-05-15)");
+            ps.setInt(1,llibreId);
+            ps.setInt(2,sociId);
+            ps.execute();
+            ps.execute();
+            ps= conn.prepareStatement("update llibres set disponible=0 where id=?");
+            ps.setInt(1,llibreId);
+           ps.execute();
+            ps.close();
+
+
+            conn.commit();
         } catch (SQLException e) {
             System.err.println("Error en la transacció. Realitzant rollback...");
             // TODO: Rollback
+           try{
+               conn.rollback();
+           }catch (Exception ex){
+               ex.getMessage();
+           }
             gestionarErrorSQL(e);
         }
 
-      */
+
     }
 
     /**
